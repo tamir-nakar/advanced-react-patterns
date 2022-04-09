@@ -3,6 +3,8 @@
 
 import * as React from 'react'
 import {Switch} from '../switch'
+import warning from 'warning'
+import {useState} from "react";
 
 const callAll = (...fns) => (...args) => fns.forEach(fn => fn?.(...args))
 
@@ -26,26 +28,48 @@ function toggleReducer(state, {type, initialState}) {
 }
 
 function useToggle({
-  initialOn = false,
-  reducer = toggleReducer,
-  // 🐨 add an `onChange` prop.
-  // 🐨 add an `on` option here
-  // 💰 you can alias it to `controlledOn` to avoid "variable shadowing."
-} = {}) {
+    readOnly = false,
+                     initialOn = false,
+                     reducer = toggleReducer,
+                     onChange = ()=>{},
+                     on:controlledOn
+                     // 🐨 add an `onChange` prop.
+                     // 🐨 add an `on` option here
+                     // 💰 you can alias it to `controlledOn` to avoid "variable shadowing."
+                   } = {}) {
+  const [isOnControlled, _] = useState(controlledOn !== null);
+  // const isOnControlled = controlledOn !== null;
+  const hasOnChange = Boolean(onChange)
+  React.useEffect(isOnControlled)
+  React.useEffect(() => {
+    warning(
+        !(!hasOnChange && isOnControlled && !readOnly),
+        `An \`on\` prop was provided to useToggle without an \`onChange\` handler. This will render a read-only toggle. If you want it to be mutable, use \`initialOn\`. Otherwise, set either \`onChange\` or \`readOnly\`.`,
+    )
+  }, [hasOnChange, isOnControlled, readOnly])
   const {current: initialState} = React.useRef({on: initialOn})
   const [state, dispatch] = React.useReducer(reducer, initialState)
+
   // 🐨 determine whether on is controlled and assign that to `onIsControlled`
   // 💰 `controlledOn != null`
 
   // 🐨 Replace the next line with assigning `on` to `controlledOn` if
   // `onIsControlled`, otherwise, it should be `state.on`.
-  const {on} = state
+
+  const on = isOnControlled? controlledOn :state.on
 
   // We want to call `onChange` any time we need to make a state change, but we
   // only want to call `dispatch` if `!onIsControlled` (otherwise we could get
   // unnecessary renders).
   // 🐨 To simplify things a bit, let's make a `dispatchWithOnChange` function
   // right here. This will:
+  function dispatchWithOnChange(action) {
+    if(!isOnControlled){
+      dispatch(action);
+    }else{
+      onChange(reducer({...state, on}, action), action)
+    }
+  }
   // 1. accept an action
   // 2. if onIsControlled is false, call dispatch with that action
   // 3. Then call `onChange` with our "suggested changes" and the action.
@@ -66,8 +90,8 @@ function useToggle({
   // so keep that in mind when you call it! How could you avoid calling it if it's not passed?
 
   // make these call `dispatchWithOnChange` instead
-  const toggle = () => dispatch({type: actionTypes.toggle})
-  const reset = () => dispatch({type: actionTypes.reset, initialState})
+  const toggle = () => dispatchWithOnChange({type: actionTypes.toggle})
+  const reset = () => dispatchWithOnChange({type: actionTypes.reset, initialState})
 
   function getTogglerProps({onClick, ...props} = {}) {
     return {
@@ -117,30 +141,30 @@ function App() {
   }
 
   return (
-    <div>
       <div>
-        <Toggle on={bothOn} onChange={handleToggleChange} />
-        <Toggle on={bothOn} onChange={handleToggleChange} />
-      </div>
-      {timesClicked > 4 ? (
-        <div data-testid="notice">
-          Whoa, you clicked too much!
-          <br />
+        <div>
+          <Toggle on={bothOn} onChange={handleToggleChange} />
+          <Toggle on={bothOn} onChange={handleToggleChange} />
         </div>
-      ) : (
-        <div data-testid="click-count">Click count: {timesClicked}</div>
-      )}
-      <button onClick={handleResetClick}>Reset</button>
-      <hr />
-      <div>
-        <div>Uncontrolled Toggle:</div>
-        <Toggle
-          onChange={(...args) =>
-            console.info('Uncontrolled Toggle onChange', ...args)
-          }
-        />
+        {timesClicked > 4 ? (
+            <div data-testid="notice">
+              Whoa, you clicked too much!
+              <br />
+            </div>
+        ) : (
+            <div data-testid="click-count">Click count: {timesClicked}</div>
+        )}
+        <button onClick={handleResetClick}>Reset</button>
+        <hr />
+        <div>
+          <div>Uncontrolled Toggle:</div>
+          <Toggle
+              onChange={(...args) =>
+                  console.info('Uncontrolled Toggle onChange', ...args)
+              }
+          />
+        </div>
       </div>
-    </div>
   )
 }
 
